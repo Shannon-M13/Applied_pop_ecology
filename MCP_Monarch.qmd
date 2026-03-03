@@ -1,0 +1,330 @@
+---
+title: "MCP_Monarch"
+format: html
+editor: visual
+---
+
+## MCP Monarch
+
+The Minimum Convex Polygon (MCP) is one of the simplest methods for estimating the home range or distributional range of a species. It works by drawing the smallest possible convex polygon that encloses a specified percentage of all observations. The 95% MCP represents the broad extent of the monarch's range, enclosing 95% of all recorded observations while excluding the most extreme outliers. The **50% MCP** represents the core use area, where monarchs are most frequently observed. In this analysis, the 95% MCP spans much of North America reflecting the monarch's well-known long-distance migration between the US/Canada and overwintering sites in Mexico, while the 50% MCP captures the core breeding region in the central and eastern United States.
+
+```{r}
+library(here) 
+library(tidyverse) 
+library(janitor)
+library(adehabitatHR)
+library(sp)
+```
+
+```{r}
+# Load & join data 
+monarch1 <- read.csv("~/Desktop/ESM211/data/Monarch1.csv")
+monarch2 <- read.csv("~/Desktop/ESM211/data/Monarch2.csv")
+monarch3 <- read.csv("~/Desktop/ESM211/data/observations.csv")
+```
+
+```{r}
+monarch1 <- monarch1 %>% mutate(captive_cultivated = as.character(captive_cultivated),
+                                 coordinates_obscured = as.character(coordinates_obscured))
+monarch2 <- monarch2 %>% mutate(captive_cultivated = as.character(captive_cultivated),
+                                 coordinates_obscured = as.character(coordinates_obscured))
+monarch3 <- monarch3 %>% mutate(captive_cultivated = as.character(captive_cultivated),
+                                 coordinates_obscured = as.character(coordinates_obscured))
+```
+
+```{r}
+# Join data 
+joined1and2 <- full_join(monarch1, monarch2)
+joinedall <- full_join(joined1and2, monarch3)
+```
+
+```{r}
+# Clean & filter 
+joinedall <- clean_names(joinedall)
+
+monarch_clean <- joinedall %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  filter(latitude >= -90 & latitude <= 90) %>%
+  filter(longitude >= -180 & longitude <= 180)
+```
+
+```{r}
+# Convert to spatial object 
+coords <- monarch_clean %>%
+  dplyr::select(longitude, latitude)
+
+monarch_sp <- SpatialPointsDataFrame(
+  coords = coords,
+  data = monarch_clean,
+  proj4string = CRS("+proj=longlat +datum=WGS84")
+)
+```
+
+```{r}
+# Add dummy ID column
+monarch_clean$id <- as.factor("monarch")
+
+# Convert to spatial object 
+coords <- monarch_clean %>%
+  dplyr::select(longitude, latitude)
+
+monarch_sp <- SpatialPointsDataFrame(
+  coords = coords,
+  data = monarch_clean,
+  proj4string = CRS("+proj=longlat +datum=WGS84")
+)
+
+# Run MCP 
+monarch_mcp_95 <- mcp(monarch_sp[, "id"], percent = 95)
+monarch_mcp_50 <- mcp(monarch_sp[, "id"], percent = 50)
+
+print(monarch_mcp_95)
+print(monarch_mcp_50)
+```
+
+```{r}
+joinedall <- clean_names(joinedall)
+
+monarch_clean <- joinedall %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  filter(latitude >= -90 & latitude <= 90) %>%
+  filter(longitude >= -180 & longitude <= 180)
+
+# Add dummy ID column
+monarch_clean$id <- as.factor("monarch")
+
+# Convert to spatial object 
+coords <- monarch_clean %>%
+  dplyr::select(longitude, latitude)
+
+monarch_sp <- SpatialPointsDataFrame(
+  coords = coords,
+  data = monarch_clean,
+  proj4string = CRS("+proj=longlat +datum=WGS84")
+)
+
+# Run MCP 
+monarch_mcp_95 <- mcp(monarch_sp[, "id"], percent = 95)
+monarch_mcp_50 <- mcp(monarch_sp[, "id"], percent = 50)
+
+print(monarch_mcp_95)
+print(monarch_mcp_50)
+
+```
+
+```{r}
+# Plot
+par(mar = c(4, 4, 3, 2))
+
+plot(monarch_mcp_95, col = adjustcolor("mediumpurple1", alpha.f = 0.4), 
+     border = "purple4", main = "Monarch Butterfly MCP Home Range",
+     xlim = c(-170, -50), ylim = c(10, 75), asp = 1)
+plot(monarch_sp, add = TRUE, pch = 1, cex = 0.3, col = "gray30")
+plot(monarch_mcp_50, col = adjustcolor("darkorchid3", alpha.f = 0.5), 
+     border = "purple4", add = TRUE)
+legend("topright", legend = c("95% MCP", "50% MCP", "Observations"),
+       fill = c(adjustcolor("mediumpurple1", alpha.f = 0.4), 
+                adjustcolor("darkorchid3", alpha.f = 0.5), NA),
+       pch = c(NA, NA, 1),
+       col = c(NA, NA, "gray30"))
+```
+
+```{r}
+# Subsample points for plotting
+monarch_plot <- monarch_clean %>% slice_sample(n = 5000)
+
+# Simple plot with fixed aspect ratio
+par(mar = c(4, 4, 3, 2), bg = "aliceblue")
+
+plot(monarch_mcp_95, col = adjustcolor("mediumpurple1", alpha.f = 0.4), 
+     border = "purple4", lwd = 2,
+     main = "Monarch Butterfly MCP Home Range",
+     xlim = c(-130, -60), ylim = c(15, 60), asp = 1.3)
+
+points(monarch_plot$longitude, monarch_plot$latitude, 
+       pch = 16, cex = 0.3, col = adjustcolor("gray20", alpha.f = 0.4))
+
+plot(monarch_mcp_50, col = adjustcolor("darkorchid3", alpha.f = 0.5), 
+     border = "purple4", lwd = 2, add = TRUE)
+
+legend("topright", legend = c("95% MCP", "50% MCP", "Observations"),
+       fill = c(adjustcolor("mediumpurple1", alpha.f = 0.4), 
+                adjustcolor("darkorchid3", alpha.f = 0.5), NA),
+       pch = c(NA, NA, 16),
+       col = c(NA, NA, "gray20"),
+       bty = "n", cex = 0.9)
+```
+
+```{r}
+# Subsample points for plotting
+monarch_plot <- monarch_clean %>% slice_sample(n = 5000)
+
+par(mar = c(4, 4, 3, 2), bg = "aliceblue")
+
+plot(monarch_mcp_95, col = adjustcolor("mediumpurple1", alpha.f = 0.4), 
+     border = "purple4", lwd = 2,
+     main = "Monarch Butterfly MCP Home Range",
+     xlim = c(-130, -60), ylim = c(15, 60), asp = 1.3)
+
+points(monarch_plot$longitude, monarch_plot$latitude, 
+       pch = 16, cex = 0.3, col = adjustcolor("gray20", alpha.f = 0.4))
+
+plot(monarch_mcp_50, col = adjustcolor("darkorchid3", alpha.f = 0.5), 
+     border = "purple4", lwd = 2, add = TRUE)
+
+legend("topright", legend = c("95% MCP", "50% MCP", "Observations"),
+       fill = c(adjustcolor("mediumpurple1", alpha.f = 0.4), 
+                adjustcolor("darkorchid3", alpha.f = 0.5), NA),
+       pch = c(NA, NA, 16),
+       col = c(NA, NA, "gray20"),
+       bty = "n", cex = 0.9)
+```
+
+```{r}
+library(maps)
+
+set.seed(42)
+monarch_plot <- monarch_clean %>% slice_sample(n = 4000)
+
+par(mar = c(4,4,3,1), bg = "white", xaxs = "i", yaxs = "i")
+
+maps::map("world",
+          regions = c("USA", "Canada", "Mexico"),
+          fill = TRUE,
+          col = "gray95",
+          border = "gray70",
+          xlim = c(-130, -60),
+          ylim = c(15, 60))
+
+plot(monarch_mcp_95,
+     add = TRUE,
+     col = adjustcolor("mediumpurple1", 0.18),
+     border = adjustcolor("purple4", 0.5),
+     lwd = 1)
+
+plot(monarch_mcp_50,
+     add = TRUE,
+     col = adjustcolor("darkorchid3", 0.6),
+     border = "purple4",
+     lwd = 2.5)
+
+points(monarch_plot$longitude,
+       monarch_plot$latitude,
+       pch = 16,
+       cex = 0.2,
+       col = adjustcolor("black", 0.25))
+
+title(main = "Monarch Butterfly Distribution",
+      cex.main = 1.5,
+      font.main = 2)
+
+mtext("Minimum Convex Polygon (95% = Broad Range, 50% = Core Use Area)",
+      side = 3,
+      line = -0.5,
+      cex = 0.9)
+
+legend("bottomleft",
+       legend = c("95% MCP", "50% MCP", "Observations"),
+       fill = c(adjustcolor("mediumpurple1", 0.18),
+                adjustcolor("darkorchid3", 0.6),
+                NA),
+       pch = c(NA, NA, 16),
+       col = c(NA, NA, adjustcolor("black", 0.5)),
+       pt.cex = 0.8,
+       bty = "n",
+       cex = 0.9)
+```
+
+```{r}
+library(maps)
+
+set.seed(42)
+monarch_plot <- monarch_clean %>% slice_sample(n = 4000)
+
+# Calculate bounding box from 95% MCP
+mcp_bbox <- bbox(monarch_mcp_95)  # returns xmin, xmax, ymin, ymax
+
+par(mar = c(4,4,3,1), bg = "white", xaxs = "i", yaxs = "i")
+
+# Draw base map
+maps::map("world",
+          regions = c("USA", "Canada", "Mexico"),
+          fill = TRUE,
+          col = "gray95",
+          border = "gray70",
+          xlim = c(mcp_bbox[1,1] - 5, mcp_bbox[1,2] + 5),
+          ylim = c(mcp_bbox[2,1] - 5, mcp_bbox[2,2] + 5))
+
+# Add MCP polygons with orange shades
+plot(monarch_mcp_95,
+     add = TRUE,
+     col = adjustcolor("orange1", alpha.f = 0.25),  # lighter orange
+     border = adjustcolor("darkorange2", 0.7),
+     lwd = 1)
+
+plot(monarch_mcp_50,
+     add = TRUE,
+     col = adjustcolor("darkorange", alpha.f = 0.5),  # darker orange
+     border = "darkorange3",
+     lwd = 2.5)
+
+# Add observation points
+points(monarch_plot$longitude,
+       monarch_plot$latitude,
+       pch = 16,
+       cex = 0.2,
+       col = adjustcolor("orangered", 0.3))  # subtle orange points
+
+# Add title and subtitle
+title(main = "Monarch Butterfly Distribution",
+      cex.main = 1.5,
+      font.main = 2)
+
+mtext("Minimum Convex Polygon (95% = Broad Range, 50% = Core Use Area)",
+      side = 3,
+      line = -0.5,
+      cex = 0.9)
+
+# Add legend
+legend("bottomleft",
+       legend = c("95% MCP", "50% MCP", "Observations"),
+       fill = c(adjustcolor("orange1", 0.25),
+                adjustcolor("darkorange", 0.5),
+                NA),
+       pch = c(NA, NA, 16),
+       col = c(NA, NA, adjustcolor("orangered", 0.3)),
+       pt.cex = 0.8,
+       bty = "n",
+       cex = 0.9)
+```
+
+```{r}
+library(ggplot2)
+
+# Convert MCP to data frames
+mcp_95_df <- fortify(monarch_mcp_95)
+mcp_50_df <- fortify(monarch_mcp_50)
+
+# Subsample points so it doesn't crash
+monarch_plot <- monarch_clean %>% slice_sample(n = 10000)
+
+# Get built-in world map from ggplot2
+world <- map_data("world")
+
+ggplot() +
+  geom_polygon(data = world, aes(x = long, y = lat, group = group),
+               fill = "gray95", color = "gray70", linewidth = 0.2) +
+  geom_polygon(data = mcp_95_df, aes(x = long, y = lat, group = group),
+               fill = adjustcolor("mediumpurple1", alpha.f = 0.3),
+               color = "purple4", linewidth = 0.8) +
+  geom_polygon(data = mcp_50_df, aes(x = long, y = lat, group = group),
+               fill = adjustcolor("darkorchid3", alpha.f = 0.4),
+               color = "purple4", linewidth = 0.8) +
+  geom_point(data = monarch_plot, aes(x = longitude, y = latitude),
+             size = 0.2, color = "gray20", alpha = 0.4) +
+  coord_fixed(ratio = 1.3, xlim = c(-170, -50), ylim = c(10, 75)) +
+  labs(title = "Monarch Butterfly MCP Home Range",
+       subtitle = "2010-2023 iNaturalist Observations",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
