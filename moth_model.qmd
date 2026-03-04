@@ -1,0 +1,158 @@
+---
+title: "moth_model"
+format: html
+---
+
+```{r}
+# filter observed_on to 2015
+rm(list = ls())
+library(here) #localized file paths
+library(tidyverse) #compendium of useful packages
+library(janitor) #cleans data
+library(rinat) #data interface for iNaturalist
+library(sf) # for converting and using simple features in maps
+library(rnaturalearth) #map data and functions
+library(rnaturalearthdata) #map data
+library(patchwork) # for stacking figures
+library(sp)#For dealing with spatial data
+library(adehabitatHR)# for home range estimation
+library(readr)
+library(lubridate)
+
+obs_moth_clean <- read_csv(here("Semirelect_Underwing_RESEARCH_INAT.csv")) |> dplyr::select(latitude, longitude) |>drop_na()
+
+moth_sf<-st_as_sf(obs_moth_clean, coords = c("longitude", "latitude"),crs = 4326)
+
+moth_proj<-st_transform(moth_sf, 5070)
+moth_points<-SpatialPoints(coords=st_coordinates(moth_proj), 
+                                proj4string = CRS(st_crs(moth_proj)$proj4string))
+
+kud<-kernelUD(moth_points, h="href")
+
+kde_poly_moth_90<- getverticeshr(kud,percent = 90)
+kde_poly_moth_50<- getverticeshr(kud,percent = 50)
+
+north_am <- ne_countries(country = c("United States of America", "Canada"), 
+                              scale = "medium", 
+                              returnclass = "sf")
+bbox <- st_bbox(moth_sf)
+
+kde_sf_moth_90 <- st_as_sf(kde_poly_moth_90) |>
+  st_transform(4326)
+kde_sf_moth_50 <- st_as_sf(kde_poly_moth_50) |>
+  st_transform(4326)
+
+ggplot() +
+  geom_sf(data = north_am, fill = "white", color = "gray30") +
+  geom_sf(data = moth_sf, color="purple", alpha = 0.6,size = 1)  +
+  geom_sf(data = kde_sf_moth_90, color="purple",size = 1)  +
+  geom_sf(data = kde_sf_moth_50, color="purple",fill="purple", alpha=0.3, size = 1)  +
+  coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
+           ylim = c(bbox["ymin"], bbox["ymax"])) +
+  theme_void(base_size = 14)
+
+```
+
+```{r}
+# yearly
+obs_moth_yearly <- read_csv(here("Semirelect_Underwing_RESEARCH_INAT.csv")) |> 
+  dplyr::select(observed_on, latitude, longitude) |>
+  drop_na() |>
+  mutate(year = year(as.Date(observed_on))) |>
+  filter(year >= 2018)
+
+#obs_moth_yearly |> count(year)
+
+moth_sf_yearly <- st_as_sf(obs_moth_yearly, coords = c("longitude", "latitude"), crs = 4326) |>
+  st_transform(5070)
+
+moth_sp_yearly <- as_Spatial(moth_sf_yearly["year"])
+
+kud_yearly <- kernelUD(moth_sp_yearly, h = "href")
+
+kde_poly_yearly <- getverticeshr(kud_yearly, percent = 90)
+kde_poly_yearly50 <- getverticeshr(kud_yearly, percent = 50)
+
+kde_sf_yearly <- st_as_sf(kde_poly_yearly) |> 
+  st_transform(4326) |>
+  rename(year = id)
+kde_sf_yearly50 <- st_as_sf(kde_poly_yearly50) |> 
+  st_transform(4326) |>
+  rename(year = id)
+
+ggplot() +
+  geom_sf(data = north_am, fill = "gray95", color = "white") +
+  geom_sf(data = kde_sf_yearly, aes(fill = year), alpha = 0.4, color = "purple") +
+  geom_sf(data = kde_sf_yearly50, aes(fill = year), color = "purple", alpha=0.5, size = 0.7) +
+  coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
+           ylim = c(bbox["ymin"], bbox["ymax"])) +
+  facet_wrap(~year) + 
+  scale_fill_viridis_d() +           
+  theme_minimal() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+```
+
+```{r}
+# seasonal
+moth_seasonal <- obs_moth_yearly |>
+  mutate(month = month(as.Date(observed_on)),
+         season = case_when(
+           month %in% c(3, 4, 5) ~ "Spring",
+           month %in% c(6, 7, 8) ~ "Summer",
+           month %in% c(9, 10, 11) ~ "Fall",
+           TRUE ~ "Winter"
+         )) |>
+  mutate(season = factor(season, levels = c("Summer", "Fall")))
+
+moth_sp_season <- as_Spatial(st_as_sf(moth_seasonal, coords = c("longitude", "latitude"), crs = 4326) |> 
+                    st_transform(5070))["season"]
+
+# FALL 2021 -- only 2 obs
+kud_season <- kernelUD(moth_sp_season, h = "href")
+kde_sf_season <- st_as_sf(getverticeshr(kud_season, percent = 90)) |> 
+  st_transform(4326) |> 
+  rename(season = id)
+kde_sf_season50 <- st_as_sf(getverticeshr(kud_season, percent = 50)) |> 
+  st_transform(4326) |> 
+  rename(season = id)
+
+ggplot() +
+  geom_sf(data = north_am, fill = "gray95", color = "white") +
+  geom_sf(data = kde_sf_season, aes(fill = season), alpha = 0.5) +
+  geom_sf(data = kde_sf_season50, aes(fill = season), alpha = 0.5) +
+  facet_wrap(~season) +
+    coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
+           ylim = c(bbox["ymin"], bbox["ymax"]))  +
+  theme_void()
+```
+
+```{r}
+# seasonal by year
+moth_seasonal_yearly <- moth_seasonal |>
+  mutate(year_season = paste(season, year, sep = " ")) |>
+  # only 3 obs made in fall 2021; kernelUD requires at least 5
+  filter(year_season != "Fall 2021")
+
+moth_sp_seasonal_yearly <- as_Spatial(st_as_sf(moth_seasonal_yearly, coords = c("longitude", "latitude"), crs = 4326) |> 
+                    st_transform(5070))["year_season"]
+
+kud_seasonal_yearly <- kernelUD(moth_sp_seasonal_yearly, h = "href", extent=2)
+kde_sf_seasonal_yearly <- st_as_sf(getverticeshr(kud_seasonal_yearly, percent = 90)) |> 
+  st_transform(4326) |> 
+  rename(year_season = id)
+kde_sf_seasonal_yearly50 <- st_as_sf(getverticeshr(kud_seasonal_yearly, percent = 50)) |> 
+  st_transform(4326) |> 
+  rename(year_season = id)
+
+ggplot() +
+  geom_sf(data = north_am, fill = "gray95", color = "white") +
+  geom_sf(data = kde_sf_seasonal_yearly, aes(fill = year_season), alpha = 0.5) +
+  geom_sf(data = kde_sf_seasonal_yearly50, aes(fill = year_season), alpha = 0.5) +
+  facet_wrap(~year_season) +
+    coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
+           ylim = c(bbox["ymin"], bbox["ymax"]))  +
+  theme_void()
+```
+
