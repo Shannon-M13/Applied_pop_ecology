@@ -1,0 +1,147 @@
+---
+title: "Monarch_MCP_updated"
+format: html
+editor: visual
+---
+
+## Overview
+
+This analysis uses Minimum Convex Polygon (MCP) home range estimation to examine the seasonal distribution of the Monarch Butterfly (*Danaus plexippus*) across North America from 2015–2024, using occurrence data from iNaturalist.
+
+```{r}
+# Clear environment 
+rm(list = ls())
+
+# Load packages 
+library(here)
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(sf)
+library(sp)
+library(adehabitatHR)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(viridis)
+```
+
+```{r}
+# 1. Read, clean & filter dates (2015-2024)
+monarch_raw <- read.csv("~/Desktop/ESM211/data/Monarch1.csv") |>
+  mutate(captive_cultivated = as.character(captive_cultivated),
+         coordinates_obscured = as.character(coordinates_obscured)) |>
+  bind_rows(
+    read.csv("~/Desktop/ESM211/data/Monarch2.csv") |>
+      mutate(captive_cultivated = as.character(captive_cultivated),
+             coordinates_obscured = as.character(coordinates_obscured))) |>
+  bind_rows(
+    read.csv("~/Desktop/ESM211/data/observations.csv") |>
+      mutate(captive_cultivated = as.character(captive_cultivated),
+             coordinates_obscured = as.character(coordinates_obscured))) |>
+  clean_names() |>
+  dplyr::select(observed_on, latitude, longitude) |>
+  drop_na() |>
+  mutate(
+    observed_on = as.Date(observed_on),
+    year = year(observed_on),
+    month = month(observed_on)) |>
+  filter(
+    observed_on >= as.Date("2015-01-01"),
+    observed_on <= as.Date("2024-12-31"),
+    latitude >= 15 & latitude <= 60,
+    longitude >= -130 & longitude <= -60)
+```
+
+```{r}
+# 2. Seasons
+monarch_seasonal <- monarch_raw |>
+  mutate(
+    season = case_when(
+      month %in% c(3, 4, 5)   ~ "Spring",
+      month %in% c(6, 7, 8)   ~ "Summer",
+      month %in% c(9, 10, 11) ~ "Fall",
+      TRUE                     ~ "Winter"),
+    year_num = as.integer(year),
+    season = factor(season, levels = c("Spring", "Summer", "Fall", "Winter"))) |>
+  filter(!is.na(season)) |>
+  mutate(year_season = paste(season, year_num))
+```
+
+```{r}
+# 3. Create basemap and bbox
+north_am <- ne_countries(
+  country = c("United States of America", "Canada", "Mexico"),
+  scale = "medium",
+  returnclass = "sf")
+
+bbox <- st_bbox(st_as_sf(monarch_seasonal, 
+                          coords = c("longitude", "latitude"), crs = 4326))
+```
+
+```{r}
+# 4. Seasonal MCP-by-year plot function (using single color per season)
+plot_season_mcp <- function(season_name, min_n = 5) {
+  
+  season_fill <- case_when(
+    season_name == "Spring" ~ "#5F9E6E",
+    season_name == "Summer" ~ "#F2B701",
+    season_name == "Fall"   ~ "#E16C09",
+    season_name == "Winter" ~ "#4394C3"
+  )
+  
+  dat <- monarch_seasonal |>
+    filter(season == season_name) |>
+    group_by(year_num) |>
+    filter(n() >= min_n) |>
+    ungroup()
+  
+  if (nrow(dat) == 0) stop(paste("No data for", season_name))
+  
+  monarch_sp <- as_Spatial(
+    st_as_sf(dat, coords = c("longitude", "latitude"), crs = 4326) |>
+      st_transform(5070))["year_num"]
+  
+  mcp95 <- mcp(monarch_sp, percent = 95)
+  mcp50 <- mcp(monarch_sp, percent = 50)
+  
+  mcp95_sf <- st_as_sf(mcp95) |> st_transform(4326) |> rename(year = id)
+  mcp50_sf <- st_as_sf(mcp50) |> st_transform(4326) |> rename(year = id)
+  
+  ggplot() +
+    geom_sf(data = north_am, fill = "gray95", color = "black") +
+    geom_sf(data = mcp95_sf, fill = adjustcolor(season_fill, alpha.f = 0.35),
+            color = season_fill, linewidth = 0.7) +
+    geom_sf(data = mcp50_sf, fill = adjustcolor(season_fill, alpha.f = 0.65),
+            color = season_fill, linewidth = 0.7) +
+    facet_wrap(~year) +
+    coord_sf(
+      xlim = c(bbox["xmin"], bbox["xmax"]),
+      ylim = c(bbox["ymin"], bbox["ymax"])) +
+    theme_minimal(base_size = 12) +
+    theme(
+      legend.position = "none",
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      panel.grid = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8),
+      strip.background = element_rect(fill = "gray85", color = "black", linewidth = 0.8),
+      strip.text = element_text(face = "bold", size = 9)) +
+    labs(
+      title = paste0("Monarch Butterfly ", season_name, " MCP (2015-2024)"),
+      subtitle = "95% MCP (overall) and 50% MCP (core)")
+}
+```
+
+```{r}
+# 5. Plot each season
+p_spring <- plot_season_mcp("Spring")
+p_summer <- plot_season_mcp("Summer")
+p_fall   <- plot_season_mcp("Fall")
+p_winter <- plot_season_mcp("Winter")
+
+print(p_spring)
+print(p_summer)
+print(p_fall)
+print(p_winter)
+```
