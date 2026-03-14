@@ -19,8 +19,6 @@ joined1and2<- full_join(monarch1, monarch2)
 
 joinedall<- full_join(joined1and2, monarch3)
 
-#plot of all monarch points
-
 bbox <- list(
   swlat = 15.02673,
   swlng = -137.879,
