@@ -11,9 +11,9 @@ library(patchwork) # for stacking figures
 library(sp)#For dealing with spatial data
 library(adehabitatHR)# for home range estimation
 
-monarch1<- read.csv("C:/Users/s13ma/Downloads/Monarch_research_1_1_2010_through_1_1_2020.csv")
-monarch2<- read.csv("C:/Users/s13ma/Downloads/Monarch_research_1_2_2020_through_1_1_2023.csv")
-monarch3<- read.csv("C:/Users/s13ma/Downloads/observations-685188 (1).csv")
+monarch1<- read.csv("C:/Users/Monarch_research_1_1_2010_through_1_1_2020.csv")
+monarch2<- read.csv("C:/Users/Monarch_research_1_2_2020_through_1_1_2023.csv")
+monarch3<- read.csv("C:/Users/observations-685188 (1).csv")
 
 joined1and2<- full_join(monarch1, monarch2)
 
