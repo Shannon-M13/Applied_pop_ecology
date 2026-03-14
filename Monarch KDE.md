@@ -1,4 +1,4 @@
-#Loading data and setting up library
+# Loading data and setting up library
 
 library(here) 
 library(tidyverse) 
@@ -171,7 +171,7 @@ seasonal_plot <- ggplot() +
           strip.text = element_text(face = "bold", size = 9),
          legend.position = "none")
 
-#Seasonal and Yearly KDE of Monarch 
+# Seasonal and Yearly KDE of Monarch 
 
 monarch_winter_yearly <- monarch_seasonal |>
   filter(season== "Winter")|>
