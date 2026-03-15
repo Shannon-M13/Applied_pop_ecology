@@ -21,16 +21,17 @@ joinedall<- full_join(joined1and2, monarch3)
 
 bbox <- list(
   swlat = 15.02673,
-  swlng = -137.879,
-  nelat = 59.86927,
-  nelng = -40.75595) 
+  swlng = -130.1,
+  nelat = 55.86927,
+  nelng = -60.1
+) 
 
 monarch_clean<- joinedall |> dplyr::select(latitude, longitude) |>drop_na()
 
 min_lat <- 15
-max_lat <- 59
-min_lon <- -138
-max_lon <- -40
+max_lat <- 55
+min_lon <- -130
+max_lon <- -60
 
 monarch_filter <- monarch_clean |>
   filter(
@@ -143,31 +144,62 @@ monarch_seasonal <- monarch_sf_date|>
          )) |>
   mutate(season = factor(season, levels = c("Spring", "Summer", "Fall", "Winter")))
 
-monarch_sp_season <- as_Spatial(st_as_sf(monarch_seasonal, coords = c("longitude", "latitude"), crs = 4326) |>
-                                  st_transform(5070))["season"]
-kud_season <- kernelUD(monarch_sp_season, h = "href")
-kde_sf_season <- st_as_sf(getverticeshr(kud_season, percent = 90)) |>
-  st_transform(4326) |>
-  rename(season = id)
-kde_sf_season50 <- st_as_sf(getverticeshr(kud_season, percent = 50)) |>
-  st_transform(4326) |>
-  rename(season = id)
+plot_season_kde <- function(season_name, min_n = 5) {
 
-seasonal_plot <- ggplot() +
+  season_fill <- case_when(
+    season_name == "Spring" ~ "#5F9E6E",
+    season_name == "Summer" ~ "#F2B701",
+    season_name == "Fall"   ~ "#E16C09",
+    season_name == "Winter" ~ "#4394C3"
+  )  
+  dat <- monarch_seasonal_ |>
+    filter(season == season_name) |>
+    group_by(year_num) |>
+    filter(n() >= min_n) |>
+    ungroup()
+  
+  if (nrow(dat) == 0) stop(paste("No data for", season_name))
+  
+  monarch_sp_season <- as_Spatial(st_as_sf(monarch_seasonal_, coords = c("longitude", "latitude"), crs = 4326) |>
+                                    st_transform(5070))["season"]
+  kud_season <- kernelUD(monarch_sp_season, h = "href")
+  kde_sf_season <- st_as_sf(getverticeshr(kud_season, percent = 90)) |>
+    st_transform(4326) |>
+    rename(season = id)
+  kde_sf_season50 <- st_as_sf(getverticeshr(kud_season, percent = 50)) |>
+    st_transform(4326) |>
+    rename(season = id)
+  
+ggplot() +
   geom_sf(data = north_am, fill = "gray95", color = "black") +
-  geom_sf(data = kde_sf_season, fill = "darkorange2", alpha = 0.15, color = "darkorange2", linewidth = 0.3) +
-  geom_sf(data = kde_sf_season50, fill = "darkorange2", alpha = 0.45, color = "darkorange2", linewidth = 0.8) +
+  geom_sf(data = kde_sf_season, fill = adjustcolor(season_fill, alpha.f = 0.35),
+          color = season_fill, linewidth = 0.3) +
+  geom_sf(data = kde_sf_season50, fill = adjustcolor(season_fill, alpha.f = 0.65),
+          color = season_fill, linewidth = 0.8) +
   facet_wrap(~season) +
-  coord_sf(xlim = c(bbox$swlng, bbox$nelng), ylim = c(bbox$swlat, bbox$nelat))  +
-  theme_minimal(base_size = 12)+
-  theme(axis.title = element_blank(),
-          axis.text = element_blank(),
-          axis.ticks = element_blank(),
-          panel.grid = element_blank(), 
-          panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8), 
-          strip.background = element_rect(fill = "gray85", color = "black", linewidth = 0.8), 
-          strip.text = element_text(face = "bold", size = 9),
-         legend.position = "none")
+  coord_sf(xlim = c(bbox$swlng, bbox$nelng), ylim = c(bbox$swlat, bbox$nelat)) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8),
+    strip.background = element_rect(fill = "gray85", color = "black", linewidth = 0.8),
+    strip.text = element_text(face = "bold", size = 9)) 
+} 
+
+p_spring <- plot_season_kde("Spring")
+p_summer <- plot_season_kde("Summer")
+p_fall   <- plot_season_kde("Fall")
+p_winter <- plot_season_kde("Winter")
+
+print(p_spring)
+print(p_summer)
+print(p_fall)
+print(p_winter)
+
 
 # Seasonal and Yearly KDE of Monarch 
 
